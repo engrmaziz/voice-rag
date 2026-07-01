@@ -43,7 +43,8 @@ async def run_pipeline(audio_path, conversation_id):
     
     with open(audio_path, "rb") as file:
         transcription = await client.audio.transcriptions.create(
-            file=(audio_path, file.read()),
+            # Pass the base filename properly to the Groq API
+            file=(os.path.basename(audio_path), file.read()),
             model="whisper-large-v3",
         )
     transcribed_text = transcription.text
@@ -78,23 +79,20 @@ class VoiceConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data=None, bytes_data=None):
         if bytes_data:
+            audio_path = None
             try:
                 # Save the bytes to a temp file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as tmp_file:
                     tmp_file.write(bytes_data)
                     audio_path = tmp_file.name
                 
-                # Optional: Extract conversation_id from route kwargs if present
+                # Extract conversation_id from route kwargs if present
                 conversation_id = None
                 if 'url_route' in self.scope and 'kwargs' in self.scope['url_route']:
                     conversation_id = self.scope['url_route']['kwargs'].get('conversation_id')
                 
-                # Call the placeholder async function
+                # Call the LangGraph pipeline
                 result = await run_pipeline(audio_path, conversation_id)
-                
-                # Clean up the temp file
-                if os.path.exists(audio_path):
-                    os.remove(audio_path)
                 
                 # Send the dict back to the client as JSON
                 await self.send(text_data=json.dumps(result))
@@ -102,3 +100,8 @@ class VoiceConsumer(AsyncWebsocketConsumer):
             except Exception as e:
                 # Handle exceptions without crashing the socket
                 await self.send(text_data=json.dumps({"error": str(e)}))
+                
+            finally:
+                # GUARANTEE cleanup of the temp file to prevent storage leaks
+                if audio_path and os.path.exists(audio_path):
+                    os.remove(audio_path)
