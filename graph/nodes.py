@@ -1,10 +1,11 @@
+
 import os
 import pickle
 from pydantic import BaseModel, Field
 from sentence_transformers import CrossEncoder
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
-from langchain.retrievers import EnsembleRetriever
+from langchain_classic.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings

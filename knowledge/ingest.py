@@ -1,7 +1,7 @@
 import os
 import pickle
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document as LangchainDocument
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document as LangchainDocument
 from langchain_community.retrievers import BM25Retriever
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
