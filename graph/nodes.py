@@ -60,7 +60,7 @@ def hybrid_retrieve(state: GraphState) -> GraphState:
     bm25_retriever.k = 10
     
     # Setup Pinecone VectorStore Retriever
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = HuggingFaceEmbeddings(model_name="./all-MiniLM-L6-v2")
     index_name = os.environ.get("PINECONE_INDEX_NAME", "default-index")
     vectorstore = PineconeVectorStore(index_name=index_name, embedding=embeddings)
     pinecone_retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
