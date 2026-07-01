@@ -1,4 +1,3 @@
-
 import os
 import pickle
 from pydantic import BaseModel, Field
@@ -24,7 +23,8 @@ def rewrite_query(state: GraphState) -> GraphState:
     # Format history for the prompt
     history_str = "\n".join([str(msg) for msg in recent_history])
     
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+    # Using the new 120b model
+    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
     
     prompt = PromptTemplate(
         template="""You are an expert conversational assistant. 
@@ -121,7 +121,7 @@ def grade_documents(state: GraphState) -> GraphState:
     if not documents:
         return {"documents": [], "retry_count": retry_count + 1}
     
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
     structured_llm = llm.with_structured_output(GradeResult)
     
     prompt = PromptTemplate(
@@ -162,3 +162,72 @@ def decide_after_grading(state: GraphState) -> str:
     
     return "generate"
 
+class FaithfulnessResult(BaseModel):
+    is_grounded: bool = Field(description="Is the generation fully supported by the retrieved context?")
+
+def generate(state: GraphState) -> GraphState:
+    """
+    Generates an answer using the retrieved documents.
+    """
+    question = state["question"]
+    documents = state.get("documents", [])
+    
+    # If no documents survived the grader, return a fallback answer
+    if not documents:
+        return {
+            "generation": "I'm sorry, I couldn't find enough relevant information to answer that question.", 
+            "sources": []
+        }
+    
+    # Format documents into numbered context blocks
+    context = "\n\n".join([f"[Source {i+1}]: {doc.page_content}" for i, doc in enumerate(documents)])
+    sources_metadata = [doc.metadata for doc in documents]
+    
+    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
+    prompt = PromptTemplate(
+        template="""You are a helpful assistant. Use the following pieces of retrieved context to answer the question. 
+If you don't know the answer, just say that you don't know. Answer strictly from the context provided.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:""",
+        input_variables=["context", "question"],
+    )
+    
+    chain = prompt | llm
+    response = chain.invoke({"context": context, "question": question})
+    
+    return {"generation": response.content, "sources": sources_metadata}
+
+def check_hallucination(state: GraphState) -> GraphState:
+    """
+    Self-RAG: Checks if the generated answer hallucinated facts outside the documents.
+    """
+    documents = state.get("documents", [])
+    generation = state.get("generation", "")
+    retry_count = state.get("retry_count", 0)
+    
+    if not documents or not generation:
+        return state
+        
+    context = "\n\n".join([doc.page_content for doc in documents])
+    
+    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
+    structured_llm = llm.with_structured_output(FaithfulnessResult)
+    
+    check_prompt = f"Is the following answer fully supported by the facts in the context? \n\nContext: {context}\n\nAnswer: {generation}"
+    
+    try:
+        result = structured_llm.invoke(check_prompt)
+        # If it hallucinated and we haven't retried yet, force it to generate again
+        if not result.is_grounded and retry_count < 1:
+            state["retry_count"] += 1
+            return generate(state) 
+    except Exception:
+        # If the structured output parser fails, pass the state through
+        pass 
+        
+    return state
