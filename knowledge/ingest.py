@@ -71,7 +71,7 @@ def process_documents(queryset):
     PineconeVectorStore.from_documents(
         all_chunks,
         embedding=embeddings,
-        index_name=index_name
+        index_name="voicerag-index"
     )
     
     # 4. Build BM25Retriever and save to a local pickle file
