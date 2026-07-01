@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Document
+from knowledge.ingest import process_documents
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
@@ -8,6 +9,4 @@ class DocumentAdmin(admin.ModelAdmin):
 
     @admin.action(description='Run ingestion for selected documents')
     def run_ingestion(self, request, queryset):
-        for doc in queryset:
-            print(f"Ingesting {doc.title}...")
-        queryset.update(ingested=True)
+        process_documents(queryset)
