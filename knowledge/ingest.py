@@ -65,12 +65,8 @@ def process_documents(queryset):
         return
 
     # 3. Initialize HuggingFaceEmbeddings and upsert into Pinecone
-    # Replace the existing embeddings initialization line with this:
-embeddings = HuggingFaceEmbeddings(
-    model_name="./all-MiniLM-L6-v2", 
-    encode_kwargs={'normalize_embeddings': True}
-)
-index_name = os.environ.get("PINECONE_INDEX_NAME", "default-index")
+    embeddings = HuggingFaceEmbeddings(model_name="./all-MiniLM-L6-v2")
+    index_name = os.environ.get("PINECONE_INDEX_NAME", "default-index")
     
     PineconeVectorStore.from_documents(
         all_chunks,
