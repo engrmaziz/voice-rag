@@ -24,7 +24,7 @@ def rewrite_query(state: GraphState) -> GraphState:
     history_str = "\n".join([str(msg) for msg in recent_history])
     
     # Using the new 120b model
-    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
+    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
     
     prompt = PromptTemplate(
         template="""You are an expert conversational assistant. 
@@ -121,8 +121,9 @@ def grade_documents(state: GraphState) -> GraphState:
     if not documents:
         return {"documents": [], "retry_count": retry_count + 1}
     
-    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
-    structured_llm = llm.with_structured_output(GradeResult)
+    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    # FIX: Explicitly force JSON mode instead of Tool Calling
+    structured_llm = llm.with_structured_output(GradeResult, method="json_mode")
     
     prompt = PromptTemplate(
         template="""You are a grader assessing relevance of a retrieved document to a user question.
@@ -133,6 +134,7 @@ Here is the user question:
 {question}
 
 Assess whether the document is relevant to the question.
+You MUST respond with a valid JSON object containing a single boolean key "is_relevant".
 """,
         input_variables=["document", "question"],
     )
@@ -141,14 +143,20 @@ Assess whether the document is relevant to the question.
     
     relevant_docs = []
     for doc in documents:
-        result = chain.invoke({"document": doc.page_content, "question": question})
-        if result.is_relevant:
-            relevant_docs.append(doc)
+        try:
+            result = chain.invoke({"document": doc.page_content, "question": question})
+            if getattr(result, 'is_relevant', False):
+                relevant_docs.append(doc)
+        except Exception as e:
+            # If parsing fails, be safe and drop the document
+            print(f"Grading failed: {e}")
+            pass
             
     if not relevant_docs:
         retry_count += 1
         
     return {"documents": relevant_docs, "retry_count": retry_count}
+
 
 def decide_after_grading(state: GraphState) -> str:
     """
@@ -183,7 +191,7 @@ def generate(state: GraphState) -> GraphState:
     context = "\n\n".join([f"[Source {i+1}]: {doc.page_content}" for i, doc in enumerate(documents)])
     sources_metadata = [doc.metadata for doc in documents]
     
-    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
+    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
     prompt = PromptTemplate(
         template="""You are a helpful assistant. Use the following pieces of retrieved context to answer the question. 
 If you don't know the answer, just say that you don't know. Answer strictly from the context provided.
@@ -215,19 +223,18 @@ def check_hallucination(state: GraphState) -> GraphState:
         
     context = "\n\n".join([doc.page_content for doc in documents])
     
-    llm = ChatGroq(model="gpt-oss-120b", temperature=0)
-    structured_llm = llm.with_structured_output(FaithfulnessResult)
+    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
+    # FIX: Explicitly force JSON mode
+    structured_llm = llm.with_structured_output(FaithfulnessResult, method="json_mode")
     
-    check_prompt = f"Is the following answer fully supported by the facts in the context? \n\nContext: {context}\n\nAnswer: {generation}"
+    check_prompt = f"Is the following answer fully supported by the facts in the context? \n\nContext: {context}\n\nAnswer: {generation}\n\nYou MUST respond with a valid JSON object containing a single boolean key 'is_grounded'."
     
     try:
         result = structured_llm.invoke(check_prompt)
-        # If it hallucinated and we haven't retried yet, force it to generate again
-        if not result.is_grounded and retry_count < 1:
+        if not getattr(result, 'is_grounded', True) and retry_count < 1:
             state["retry_count"] += 1
             return generate(state) 
     except Exception:
-        # If the structured output parser fails, pass the state through
         pass 
         
     return state
