@@ -228,4 +228,5 @@ all-MiniLM-L6-v2/
 *.pkl
 venv/
 __pycache__/
-.env
+.envbm25_corpus.pkl
+bm25_corpus.pkl
