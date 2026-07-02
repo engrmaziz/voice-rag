@@ -77,7 +77,10 @@ def process_documents(queryset):
     # 3. Initialize HuggingFaceEmbeddings and upsert into Pinecone
     # Using the HF Hub identifier prevents Git repository size limits
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-index_name = os.environ.get("PINECONE_INDEX_NAME", "voicerag-index").strip()    
+    
+    # INDENTATION FIXED HERE
+    index_name = os.environ.get("PINECONE_INDEX_NAME", "voicerag-index").strip()    
+    
     PineconeVectorStore.from_documents(
         all_chunks,
         embedding=embeddings,
