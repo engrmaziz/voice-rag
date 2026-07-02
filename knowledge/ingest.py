@@ -1,5 +1,6 @@
 import os
 import pickle
+import tempfile
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document as LangchainDocument
 from langchain_community.retrievers import BM25Retriever
@@ -12,12 +13,20 @@ def process_documents(queryset):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     
     for document in queryset:
-        file_path = document.file.path
+        file_name = document.file.name.lower()
         
-        # 1. Handle PDF Files
-        if file_path.lower().endswith('.pdf'):
+        # 1. Handle PDF Files (Using Tempfile Buffer for FUSE compatibility)
+        if file_name.endswith('.pdf'):
+            tmp_file_path = None
             try:
-                loader = PyPDFLoader(file_path)
+                # Create a temporary local file on the container's fast ephemeral disk
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                    # Safely read the bytes from the mounted bucket and write locally
+                    tmp_file.write(document.file.read())
+                    tmp_file_path = tmp_file.name
+
+                # Pass the local temp path to LangChain
+                loader = PyPDFLoader(tmp_file_path)
                 pdf_docs = loader.load()
                 
                 # Split the PDF pages into smaller chunks
@@ -32,24 +41,25 @@ def process_documents(queryset):
             except Exception as e:
                 print(f"Error reading PDF file for document {document.id}: {e}")
                 continue
+            finally:
+                # Critical: Always clean up the temp file to prevent memory leaks
+                if tmp_file_path and os.path.exists(tmp_file_path):
+                    os.remove(tmp_file_path)
 
         # 2. Handle Text, Markdown, CSV, etc.
         else:
             content = None
             try:
-                # Attempt standard UTF-8 reading
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-            except UnicodeDecodeError:
+                # Read bytes directly from the Django storage object
+                raw_bytes = document.file.read()
                 try:
-                    # Fallback to latin-1 if it contains weird characters
-                    with open(file_path, 'r', encoding='latin-1') as f:
-                        content = f.read()
-                except Exception as e:
-                    print(f"Fallback reading failed for document {document.id}: {e}")
-                    continue
+                    # Attempt standard UTF-8 decoding
+                    content = raw_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Fallback to latin-1 if it contains unexpected characters
+                    content = raw_bytes.decode('latin-1')
             except Exception as e:
-                print(f"Error reading file for document {document.id}: {e}")
+                print(f"Error reading text file for document {document.id}: {e}")
                 continue
                 
             if content:
@@ -59,19 +69,19 @@ def process_documents(queryset):
                         page_content=chunk,
                         metadata={"title": document.title, "document_id": document.id}
                     ))
-            
+        
     if not all_chunks:
         print("No chunks to process.")
         return
 
     # 3. Initialize HuggingFaceEmbeddings and upsert into Pinecone
-    embeddings = HuggingFaceEmbeddings(model_name="./all-MiniLM-L6-v2")
-    index_name = os.environ.get("PINECONE_INDEX_NAME", "default-index")
-    
+    # Using the HF Hub identifier prevents Git repository size limits
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+index_name = os.environ.get("PINECONE_INDEX_NAME", "voicerag-index").strip()    
     PineconeVectorStore.from_documents(
         all_chunks,
         embedding=embeddings,
-        index_name="voicerag-index"
+        index_name=index_name
     )
     
     # 4. Build BM25Retriever and save to a local pickle file
