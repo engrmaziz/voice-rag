@@ -219,3 +219,13 @@ __marimo__/
 
 .pdf
 *.pdf
+.docx
+*.docx
+
+# Large model weights and environments
+all-MiniLM-L6-v2/
+*.bin
+*.pkl
+venv/
+__pycache__/
+.env
