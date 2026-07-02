@@ -3,7 +3,12 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from chat.models import Conversation
 from chat.serializers import ConversationSerializer
-# Create your views here.
+from django.shortcuts import render
+
+def chat_interface(request):
+    return render(request, 'chat/index.html')
+
+
 class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
