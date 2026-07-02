@@ -20,7 +20,7 @@ SECRET_KEY = 'django-insecure-=&&bfs!xw@1-!9fg)bp@ghl+9-l3vpbx@e&ke#3p4%7-yxf_=9
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [*]
+ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
     'https://engrahmedrehan-voicerag.hf.space'
 ]
