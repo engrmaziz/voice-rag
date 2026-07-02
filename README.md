@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎙️ AEGIS Core v1
+# 🎙️ VoiceRAG Core v1
 ### Enterprise Voice RAG Platform built with Django, LangGraph & LangChain
 
 <p>
@@ -563,25 +563,6 @@ Examples include replacing
 - BM25 → Elasticsearch
 
 without redesigning the application.
-
----
-
-# What's Next?
-
-The following sections dive into the implementation details:
-
-- Django Architecture
-- ASGI & Channels
-- LangGraph State Machine
-- LangChain Components
-- LangSmith Observability
-- Retrieval Pipeline
-- CRAG Workflow
-- Voice Processing
-- Knowledge Ingestion
-- Prompt Engineering
-- Deployment Architecture
-- Docker & Production Infrastructure
 
 ---
 
